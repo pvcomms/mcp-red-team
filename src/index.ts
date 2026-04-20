@@ -3,7 +3,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { runScan } from "./runner.js";
 import { printTerminal, writeMarkdown, writeJSON } from "./reporter.js";
-import type { ScanOptions } from "./types.js";
+import type { ScanOptions, StreamMode } from "./types.js";
 
 const program = new Command();
 
@@ -34,14 +34,46 @@ program
   )
   .option("--timeout <ms>", "Per-tool-call timeout in ms", "5000")
   .option("-v, --verbose", "Verbose output")
+  .option(
+    "--stream",
+    "Pretty-print per-attempt progress to stdout as the scan runs",
+  )
+  .option(
+    "--stream-json",
+    "Emit NDJSON events to stdout as the scan runs (for tool consumption)",
+  )
+  .option(
+    "--stop-on-hit",
+    "Stop the scan as soon as a critical/high finding is confirmed",
+  )
+  .option(
+    "--case <file>",
+    "Write the attack-tree case file to this path (default: cases/<uuid>.json)",
+  )
+  .option(
+    "--replay <file>",
+    "Replay every attempt in the given case file against the live target",
+  )
+  .option(
+    "--fork <nodeId>",
+    "Fork a specific node from --replay with a modified payload variant",
+  )
+  .option(
+    "--variant <mutation>",
+    "Payload mutation for --fork: base64 | url-encode | double-url | reverse | raw",
+    "raw",
+  )
   .addHelpText(
     "after",
     `
 Examples:
   mcp-red-team --stdio "python server.py"
   mcp-red-team --stdio "node build/index.js" --llm --output report.md
-  mcp-red-team --sse http://localhost:3000 --skip-behavioral
-  mcp-red-team --stdio "python server.py" --llm --output report.json
+  mcp-red-team --stdio "node build/index.js" --stream --stop-on-hit
+  mcp-red-team --stdio "node build/index.js" --stream-json | jq '.'
+  mcp-red-team --stdio "node server.js" --case cases/my-scan.json
+  mcp-red-team --stdio "node server.js" --replay cases/my-scan.json
+  mcp-red-team --stdio "node server.js" --replay cases/my-scan.json --fork a12 --variant base64
 `,
   )
   .parse();
@@ -55,6 +87,13 @@ const opts = program.opts<{
   skipBehavioral?: boolean;
   timeout: string;
   verbose?: boolean;
+  stream?: boolean;
+  streamJson?: boolean;
+  stopOnHit?: boolean;
+  case?: string;
+  replay?: string;
+  fork?: string;
+  variant?: string;
 }>();
 
 if (!opts.stdio && !opts.sse) {
@@ -82,6 +121,12 @@ if (opts.stdio) {
   args = parts.slice(1);
 }
 
+const streamMode: StreamMode = opts.streamJson
+  ? "json"
+  : opts.stream
+    ? "pretty"
+    : "off";
+
 const options: ScanOptions = {
   command,
   args,
@@ -93,13 +138,23 @@ const options: ScanOptions = {
   verbose: !!opts.verbose,
   timeout: parseInt(opts.timeout, 10),
   skipBehavioral: !!opts.skipBehavioral,
+  stream: streamMode,
+  stopOnHit: !!opts.stopOnHit,
+  caseFile: opts.case,
+  replayCase: opts.replay,
+  forkNode: opts.fork,
+  forkVariant: opts.variant,
 };
 
-console.log(chalk.gray("\nConnecting to MCP server..."));
+if (streamMode === "off") {
+  console.log(chalk.gray("\nConnecting to MCP server..."));
+}
 
 runScan(options)
   .then((result) => {
-    printTerminal(result);
+    if (streamMode !== "json") {
+      printTerminal(result);
+    }
 
     if (opts.output) {
       if (opts.output.endsWith(".json")) {
@@ -107,7 +162,9 @@ runScan(options)
       } else {
         writeMarkdown(result, opts.output);
       }
-      console.log(chalk.green(`Report written to ${opts.output}`));
+      if (streamMode !== "json") {
+        console.log(chalk.green(`Report written to ${opts.output}`));
+      }
     }
 
     const exitCode =

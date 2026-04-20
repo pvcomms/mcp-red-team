@@ -49,6 +49,62 @@ export interface ScanResult {
   tools: ToolDef[];
   findings: Finding[];
   summary: ScanSummary;
+  tree?: AttackTree;
+}
+
+export type StreamMode = "off" | "pretty" | "json";
+
+export interface StreamEvent {
+  ts: string;
+  seq: number;
+  kind:
+    | "scan-start"
+    | "probe"
+    | "branch-open"
+    | "attempt"
+    | "branch-close"
+    | "finding"
+    | "scan-end";
+  category?: Category | "probe" | "tree";
+  tool?: string;
+  nodeId?: string;
+  parentId?: string;
+  attemptNumber?: number;
+  totalAttempts?: number;
+  payloadLabel?: string;
+  outcome?: "pass" | "fail" | "error" | "skip";
+  severity?: Severity;
+  latencyMs?: number;
+  message?: string;
+  findingId?: string;
+}
+
+export interface TreeNode {
+  id: string;
+  parentId?: string;
+  kind: "root" | "probe" | "category" | "variant" | "attempt";
+  label: string;
+  category?: Category | "probe" | "tree";
+  tool?: string;
+  payloadLabel?: string;
+  payload?: string;
+  status: "pending" | "running" | "hit" | "miss" | "error" | "skipped";
+  startedAt?: string;
+  endedAt?: string;
+  latencyMs?: number;
+  input?: Record<string, unknown>;
+  output?: string;
+  verdict?: string;
+  findingIds?: string[];
+  children: string[];
+}
+
+export interface AttackTree {
+  rootId: string;
+  nodes: Record<string, TreeNode>;
+  caseId: string;
+  target: string;
+  createdAt: string;
 }
 
 export interface ScanOptions {
@@ -62,4 +118,10 @@ export interface ScanOptions {
   verbose: boolean;
   timeout: number;
   skipBehavioral: boolean;
+  stream: StreamMode;
+  stopOnHit: boolean;
+  caseFile?: string;
+  replayCase?: string;
+  forkNode?: string;
+  forkVariant?: string;
 }
