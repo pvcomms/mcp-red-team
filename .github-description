@@ -1,0 +1,1 @@
+Adversarial security scanner for MCP servers. Canary-based command injection, path traversal, typosquat and prompt-injection checks over stdio or SSE.

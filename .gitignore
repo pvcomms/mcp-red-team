@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+cases/
+*.env
+.env*
+.DS_Store
+*.log
+report.md
+report.json
